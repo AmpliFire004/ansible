@@ -1,0 +1,73 @@
+---
+- name: Install Netdata on all servers
+  hosts: "{{ target_group }}"
+  become: yes
+  become_user: root
+  become_method: sudo
+  vars:
+    ansible_become_password: NOOOOOOO!
+  gather_facts: no
+  tasks:
+    - name: Ensure required packages are installed
+      apt:
+        name:
+          - zlib1g-dev
+          - gcc
+          - make
+          - git
+          - autoconf
+          - autogen
+          - automake
+          - pkg-config
+          - curl
+        state: present
+        update_cache: yes
+      when: inventory_hostname not in groups['powered_off']
+
+
+    - name: Download Netdata kickstart script
+      get_url:
+        url: https://my-netdata.io/kickstart.sh
+        dest: /tmp/kickstart.sh
+        mode: '0755'
+      when: inventory_hostname not in groups['powered_off']
+
+    - name: Install Netdata using the kickstart script
+      shell: /tmp/kickstart.sh --non-interactive
+      when: inventory_hostname not in groups['powered_off']
+
+    - name: Ensure Netdata is running
+      systemd:
+        name: netdata
+        state: started
+        enabled: yes
+      when: inventory_hostname not in groups['powered_off']
+
+    - name: Add custom Netdata configuration
+      copy:
+        dest: /etc/netdata/stream.conf
+        content: |
+          [stream]
+              # Enable this on child nodes, to have them send metrics.
+              enabled = yes
+              destination = idkman.local:19999
+              api key = MOOOO!
+              timeout seconds = 60
+              default port = 19999
+              send charts matching = *
+              buffer size bytes = 10485760
+              reconnect delay seconds = 5
+              initial clock resync iterations = 60
+      when: inventory_hostname not in groups['powered_off']
+
+    - name: Restart Netdata to apply custom configuration
+      systemd:
+        name: netdata
+        state: restarted
+      when: inventory_hostname not in groups['powered_off']
+
+    - name: Clean up kickstart script
+      file:
+        path: /tmp/kickstart.sh
+        state: absent
+      when: inventory_hostname not in groups['powered_off']
